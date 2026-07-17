@@ -6,6 +6,7 @@ import {
   type HealthCheckResult,
   MemoryHealthIndicator,
 } from '@nestjs/terminus';
+import { SqlServerHealthIndicator } from './sql-server-health.indicator';
 
 interface LivenessResponse {
   status: 'ok';
@@ -19,7 +20,11 @@ interface LivenessResponse {
 export class HealthController {
   constructor(
     private readonly healthCheckService: HealthCheckService,
+
     private readonly memoryHealthIndicator: MemoryHealthIndicator,
+
+    private readonly sqlServerHealthIndicator: SqlServerHealthIndicator,
+
     private readonly configService: ConfigService,
   ) {}
 
@@ -27,10 +32,14 @@ export class HealthController {
   liveness(): LivenessResponse {
     return {
       status: 'ok',
+
       service:
         this.configService.get<string>('APP_NAME') ?? 'telefonia-backend',
+
       version: this.configService.get<string>('APP_VERSION') ?? '0.1.0',
+
       timestamp: new Date().toISOString(),
+
       uptimeSeconds: Math.floor(process.uptime()),
     };
   }
@@ -41,8 +50,11 @@ export class HealthController {
     return this.healthCheckService.check([
       () =>
         this.memoryHealthIndicator.checkHeap('memory_heap', 512 * 1024 * 1024),
+
       () =>
         this.memoryHealthIndicator.checkRSS('memory_rss', 1024 * 1024 * 1024),
+
+      () => this.sqlServerHealthIndicator.isHealthy('sql_server'),
     ]);
   }
 }
