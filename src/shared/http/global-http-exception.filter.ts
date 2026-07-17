@@ -6,7 +6,13 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
+import {
+  APPLICATION_ERROR_KIND,
+  ApplicationError,
+  type ApplicationErrorKind,
+} from '../application/application.error';
+import { DomainRuleViolationError } from '../domain/domain-rule-violation.error';
 import { CORRELATION_ID_HEADER } from './correlation-id.constants';
 import type { CorrelatedRequest } from './correlation-id.middleware';
 
@@ -18,12 +24,26 @@ interface ErrorResponse {
   path: string;
   method: string;
   correlationId: string;
+  details?: Readonly<Record<string, unknown>>;
 }
 
 interface ResolvedException {
+  statusCode: number;
   code: string;
   message: string | string[];
+  details?: Readonly<Record<string, unknown>>;
 }
+
+const APPLICATION_STATUS_CODES: Readonly<Record<ApplicationErrorKind, number>> =
+  {
+    [APPLICATION_ERROR_KIND.NOT_FOUND]: Number(HttpStatus.NOT_FOUND),
+
+    [APPLICATION_ERROR_KIND.CONFLICT]: Number(HttpStatus.CONFLICT),
+
+    [APPLICATION_ERROR_KIND.VALIDATION]: Number(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    ),
+  };
 
 @Catch()
 export class GlobalHttpExceptionFilter implements ExceptionFilter {
@@ -33,17 +53,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     const httpContext = host.switchToHttp();
 
     const request = httpContext.getRequest<CorrelatedRequest>();
+
     const response = httpContext.getResponse<Response>();
 
-    const statusCode =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-
-    const isServerError =
-      statusCode >= Number(HttpStatus.INTERNAL_SERVER_ERROR);
-
-    const resolvedException = this.resolveException(exception, statusCode);
+    const resolvedException = this.resolveException(exception);
 
     const correlationId =
       request.correlationId ??
@@ -51,14 +64,22 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       'unavailable';
 
     const errorResponse: ErrorResponse = {
-      statusCode,
+      statusCode: resolvedException.statusCode,
       code: resolvedException.code,
       message: resolvedException.message,
       timestamp: new Date().toISOString(),
       path: request.path,
       method: request.method,
       correlationId,
+      ...(resolvedException.details
+        ? {
+            details: resolvedException.details,
+          }
+        : {}),
     };
+
+    const isServerError =
+      resolvedException.statusCode >= Number(HttpStatus.INTERNAL_SERVER_ERROR);
 
     const logData = {
       event: 'http_request_failed',
@@ -76,24 +97,46 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       this.logger.warn(logData);
     }
 
-    response.status(statusCode).json(errorResponse);
+    response.status(resolvedException.statusCode).json(errorResponse);
   }
 
-  private resolveException(
-    exception: unknown,
-    statusCode: number,
-  ): ResolvedException {
-    if (!(exception instanceof HttpException)) {
+  private resolveException(exception: unknown): ResolvedException {
+    if (exception instanceof ApplicationError) {
       return {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Internal server error',
+        statusCode: APPLICATION_STATUS_CODES[exception.kind],
+        code: exception.code,
+        message: exception.message,
+        details: exception.details,
       };
     }
 
+    if (exception instanceof DomainRuleViolationError) {
+      return {
+        statusCode: Number(HttpStatus.CONFLICT),
+        code: exception.code,
+        message: exception.message,
+        details: exception.details,
+      };
+    }
+
+    if (exception instanceof HttpException) {
+      return this.resolveHttpException(exception);
+    }
+
+    return {
+      statusCode: Number(HttpStatus.INTERNAL_SERVER_ERROR),
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Internal server error',
+    };
+  }
+
+  private resolveHttpException(exception: HttpException): ResolvedException {
+    const statusCode = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
     if (typeof exceptionResponse === 'string') {
       return {
+        statusCode,
         code: `HTTP_${statusCode}`,
         message: exceptionResponse,
       };
@@ -114,8 +157,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
           : `HTTP_${statusCode}`;
 
     return {
+      statusCode,
       code: this.normalizeCode(rawCode),
       message,
+      details: this.resolveDetails(responseObject.details),
     };
   }
 
@@ -132,6 +177,16 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     }
 
     return fallback;
+  }
+
+  private resolveDetails(
+    value: unknown,
+  ): Readonly<Record<string, unknown>> | undefined {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return undefined;
+    }
+
+    return value as Readonly<Record<string, unknown>>;
   }
 
   private normalizeCode(value: string): string {

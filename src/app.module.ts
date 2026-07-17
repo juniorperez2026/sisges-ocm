@@ -5,6 +5,7 @@ import {
   RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AgentsModule } from './modules/agents/agents.module';
 import { HealthModule } from './modules/health/health.module';
 import { environmentValidationSchema } from './shared/config/environment.schema';
 import { CorrelationIdMiddleware } from './shared/http/correlation-id.middleware';
@@ -22,6 +23,7 @@ import { CorrelationIdMiddleware } from './shared/http/correlation-id.middleware
       },
     }),
     HealthModule,
+    AgentsModule,
   ],
 })
 export class AppModule implements NestModule {
