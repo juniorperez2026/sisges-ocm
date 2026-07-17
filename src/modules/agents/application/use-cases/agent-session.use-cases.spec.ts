@@ -7,14 +7,20 @@ import { InMemoryAgentSessionRepository } from '../../infrastructure/persistence
 import { ActiveAgentSessionExistsError } from '../errors/active-agent-session-exists.error';
 import { AgentSessionNotFoundError } from '../errors/agent-session-not-found.error';
 import { ChangeAgentStatusUseCase } from './change-agent-status.use-case';
+import { DisconnectAgentSessionUseCase } from './disconnect-agent-session.use-case';
 import { GetAgentSessionUseCase } from './get-agent-session.use-case';
+import { HeartbeatAgentSessionUseCase } from './heartbeat-agent-session.use-case';
 import { StartAgentSessionUseCase } from './start-agent-session.use-case';
 
-class FixedClock implements Clock {
-  constructor(private readonly value: Date) {}
+class MutableClock implements Clock {
+  constructor(private value: Date) {}
 
   now(): Date {
     return new Date(this.value);
+  }
+
+  set(value: Date): void {
+    this.value = new Date(value);
   }
 }
 
@@ -29,9 +35,11 @@ class FixedIdGenerator implements IdGenerator {
 describe('Agent session use cases', () => {
   const sessionId = 'c05c5705-6f0f-4bee-a835-7eb58fa67828';
 
-  const now = new Date('2026-07-16T17:00:00.000Z');
+  const connectedAt = new Date('2026-07-16T17:00:00.000Z');
 
   let repository: InMemoryAgentSessionRepository;
+
+  let clock: MutableClock;
 
   let startUseCase: StartAgentSessionUseCase;
 
@@ -39,10 +47,14 @@ describe('Agent session use cases', () => {
 
   let changeStatusUseCase: ChangeAgentStatusUseCase;
 
+  let heartbeatUseCase: HeartbeatAgentSessionUseCase;
+
+  let disconnectUseCase: DisconnectAgentSessionUseCase;
+
   beforeEach(() => {
     repository = new InMemoryAgentSessionRepository();
 
-    const clock = new FixedClock(now);
+    clock = new MutableClock(connectedAt);
 
     startUseCase = new StartAgentSessionUseCase(
       repository,
@@ -57,6 +69,10 @@ describe('Agent session use cases', () => {
       clock,
       new AgentStatusTransitionPolicy(),
     );
+
+    heartbeatUseCase = new HeartbeatAgentSessionUseCase(repository, clock);
+
+    disconnectUseCase = new DisconnectAgentSessionUseCase(repository, clock);
   });
 
   it('starts an agent session as OFFLINE', async () => {
@@ -70,9 +86,10 @@ describe('Agent session use cases', () => {
       agentId: 'agent-001',
       extensionId: 'extension-1001',
       status: AGENT_STATUS.OFFLINE,
-      connectedAt: now.toISOString(),
+      connectedAt: connectedAt.toISOString(),
       disconnectedAt: null,
-      lastStatusChangedAt: now.toISOString(),
+      lastStatusChangedAt: connectedAt.toISOString(),
+      lastHeartbeatAt: connectedAt.toISOString(),
     });
   });
 
@@ -128,6 +145,99 @@ describe('Agent session use cases', () => {
         status: AGENT_STATUS.ON_CALL,
       }),
     ).rejects.toBeInstanceOf(DomainRuleViolationError);
+  });
+
+  it('updates the heartbeat of an active session', async () => {
+    await startUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1001',
+    });
+
+    const heartbeatAt = new Date('2026-07-16T17:01:00.000Z');
+
+    clock.set(heartbeatAt);
+
+    const result = await heartbeatUseCase.execute(sessionId);
+
+    expect(result.lastHeartbeatAt).toBe(heartbeatAt.toISOString());
+  });
+
+  it('disconnects an OFFLINE session', async () => {
+    await startUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1001',
+    });
+
+    const disconnectedAt = new Date('2026-07-16T17:02:00.000Z');
+
+    clock.set(disconnectedAt);
+
+    const result = await disconnectUseCase.execute(sessionId);
+
+    expect(result.disconnectedAt).toBe(disconnectedAt.toISOString());
+  });
+
+  it('rejects disconnection while agent is AVAILABLE', async () => {
+    await startUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1001',
+    });
+
+    clock.set(new Date('2026-07-16T17:01:00.000Z'));
+
+    await changeStatusUseCase.execute({
+      sessionId,
+      status: AGENT_STATUS.AVAILABLE,
+    });
+
+    clock.set(new Date('2026-07-16T17:02:00.000Z'));
+
+    await expect(disconnectUseCase.execute(sessionId)).rejects.toMatchObject({
+      code: 'AGENT_SESSION_MUST_BE_OFFLINE_TO_DISCONNECT',
+    });
+  });
+
+  it('rejects heartbeat after disconnection', async () => {
+    await startUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1001',
+    });
+
+    clock.set(new Date('2026-07-16T17:01:00.000Z'));
+
+    await disconnectUseCase.execute(sessionId);
+
+    clock.set(new Date('2026-07-16T17:02:00.000Z'));
+
+    await expect(heartbeatUseCase.execute(sessionId)).rejects.toMatchObject({
+      code: 'AGENT_SESSION_ALREADY_DISCONNECTED',
+    });
+  });
+
+  it('allows a new session after the previous one disconnects', async () => {
+    await startUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1001',
+    });
+
+    clock.set(new Date('2026-07-16T17:01:00.000Z'));
+
+    await disconnectUseCase.execute(sessionId);
+
+    const secondStartUseCase = new StartAgentSessionUseCase(
+      repository,
+      new FixedIdGenerator('6bc597b1-2f63-4bd5-9b27-c9bc367e5278'),
+      clock,
+    );
+
+    const secondSession = await secondStartUseCase.execute({
+      agentId: 'agent-001',
+      extensionId: 'extension-1002',
+    });
+
+    expect(secondSession.id).not.toBe(sessionId);
+
+    expect(secondSession.status).toBe(AGENT_STATUS.OFFLINE);
   });
 
   it('reports an unknown session', async () => {

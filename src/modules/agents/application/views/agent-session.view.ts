@@ -9,6 +9,7 @@ export interface AgentSessionView {
   readonly connectedAt: string;
   readonly disconnectedAt: string | null;
   readonly lastStatusChangedAt: string;
+  readonly lastHeartbeatAt: string;
 }
 
 export function toAgentSessionView(session: AgentSession): AgentSessionView {
@@ -20,5 +21,6 @@ export function toAgentSessionView(session: AgentSession): AgentSessionView {
     connectedAt: session.connectedAt.toISOString(),
     disconnectedAt: session.disconnectedAt?.toISOString() ?? null,
     lastStatusChangedAt: session.lastStatusChangedAt.toISOString(),
+    lastHeartbeatAt: session.lastHeartbeatAt.toISOString(),
   };
 }

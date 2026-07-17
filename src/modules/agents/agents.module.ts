@@ -11,7 +11,9 @@ import {
   type AgentSessionRepository,
 } from './application/ports/agent-session.repository';
 import { ChangeAgentStatusUseCase } from './application/use-cases/change-agent-status.use-case';
+import { DisconnectAgentSessionUseCase } from './application/use-cases/disconnect-agent-session.use-case';
 import { GetAgentSessionUseCase } from './application/use-cases/get-agent-session.use-case';
+import { HeartbeatAgentSessionUseCase } from './application/use-cases/heartbeat-agent-session.use-case';
 import { StartAgentSessionUseCase } from './application/use-cases/start-agent-session.use-case';
 import { AgentStatusTransitionPolicy } from './domain/agent-status-transition.policy';
 import { InMemoryAgentSessionRepository } from './infrastructure/persistence/in-memory-agent-session.repository';
@@ -60,6 +62,18 @@ const applicationProviders: Provider[] = [
       clock: Clock,
       policy: AgentStatusTransitionPolicy,
     ) => new ChangeAgentStatusUseCase(repository, clock, policy),
+  },
+  {
+    provide: HeartbeatAgentSessionUseCase,
+    inject: [AGENT_SESSION_REPOSITORY, CLOCK],
+    useFactory: (repository: AgentSessionRepository, clock: Clock) =>
+      new HeartbeatAgentSessionUseCase(repository, clock),
+  },
+  {
+    provide: DisconnectAgentSessionUseCase,
+    inject: [AGENT_SESSION_REPOSITORY, CLOCK],
+    useFactory: (repository: AgentSessionRepository, clock: Clock) =>
+      new DisconnectAgentSessionUseCase(repository, clock),
   },
 ];
 

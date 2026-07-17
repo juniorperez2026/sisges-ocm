@@ -17,6 +17,7 @@ export interface AgentSessionSnapshot {
   readonly connectedAt: Date;
   readonly disconnectedAt: Date | null;
   readonly lastStatusChangedAt: Date;
+  readonly lastHeartbeatAt: Date;
 }
 
 export class AgentSession {
@@ -28,6 +29,7 @@ export class AgentSession {
     private readonly connectedAtValue: Date,
     private disconnectedAtValue: Date | null,
     private lastStatusChangedAtValue: Date,
+    private lastHeartbeatAtValue: Date,
   ) {}
 
   static start(input: StartAgentSessionInput): AgentSession {
@@ -55,14 +57,17 @@ export class AgentSession {
       'Connected date is invalid',
     );
 
+    const connectedAt = new Date(input.connectedAt);
+
     return new AgentSession(
       id,
       agentId,
       extensionId,
       AGENT_STATUS.OFFLINE,
-      new Date(input.connectedAt),
+      connectedAt,
       null,
-      new Date(input.connectedAt),
+      connectedAt,
+      connectedAt,
     );
   }
 
@@ -75,6 +80,7 @@ export class AgentSession {
       new Date(snapshot.connectedAt),
       snapshot.disconnectedAt ? new Date(snapshot.disconnectedAt) : null,
       new Date(snapshot.lastStatusChangedAt),
+      new Date(snapshot.lastHeartbeatAt),
     );
   }
 
@@ -83,15 +89,7 @@ export class AgentSession {
     changedAt: Date,
     transitionPolicy: AgentStatusTransitionPolicy,
   ): void {
-    if (!this.isActive()) {
-      throw new DomainRuleViolationError({
-        code: 'AGENT_SESSION_ALREADY_DISCONNECTED',
-        message: 'The status of a disconnected agent session cannot be changed',
-        details: {
-          sessionId: this.idValue,
-        },
-      });
-    }
+    this.assertActive();
 
     AgentSession.assertValidDate(
       changedAt,
@@ -99,14 +97,16 @@ export class AgentSession {
       'Status change date is invalid',
     );
 
-    if (changedAt.getTime() < this.lastStatusChangedAtValue.getTime()) {
+    const latestKnownActivityAt = this.getLatestKnownActivityTimestamp();
+
+    if (changedAt.getTime() < latestKnownActivityAt) {
       throw new DomainRuleViolationError({
         code: 'AGENT_STATUS_DATE_OUT_OF_ORDER',
         message:
-          'Agent status change date cannot be earlier than the previous change',
+          'Agent status change date cannot be earlier than the latest session activity',
         details: {
           sessionId: this.idValue,
-          previousChangedAt: this.lastStatusChangedAtValue.toISOString(),
+          latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
           receivedChangedAt: changedAt.toISOString(),
         },
       });
@@ -116,6 +116,71 @@ export class AgentSession {
 
     this.statusValue = nextStatus;
     this.lastStatusChangedAtValue = new Date(changedAt);
+  }
+
+  recordHeartbeat(receivedAt: Date): void {
+    this.assertActive();
+
+    AgentSession.assertValidDate(
+      receivedAt,
+      'INVALID_HEARTBEAT_AT',
+      'Heartbeat date is invalid',
+    );
+
+    const latestKnownActivityAt = this.getLatestKnownActivityTimestamp();
+
+    if (receivedAt.getTime() < latestKnownActivityAt) {
+      throw new DomainRuleViolationError({
+        code: 'AGENT_HEARTBEAT_DATE_OUT_OF_ORDER',
+        message:
+          'Heartbeat date cannot be earlier than the latest session activity',
+        details: {
+          sessionId: this.idValue,
+          latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
+          receivedHeartbeatAt: receivedAt.toISOString(),
+        },
+      });
+    }
+
+    this.lastHeartbeatAtValue = new Date(receivedAt);
+  }
+
+  disconnect(disconnectedAt: Date): void {
+    this.assertActive();
+
+    if (this.statusValue !== AGENT_STATUS.OFFLINE) {
+      throw new DomainRuleViolationError({
+        code: 'AGENT_SESSION_MUST_BE_OFFLINE_TO_DISCONNECT',
+        message: 'Agent session must be OFFLINE before disconnecting',
+        details: {
+          sessionId: this.idValue,
+          currentStatus: this.statusValue,
+        },
+      });
+    }
+
+    AgentSession.assertValidDate(
+      disconnectedAt,
+      'INVALID_DISCONNECTED_AT',
+      'Disconnected date is invalid',
+    );
+
+    const latestKnownActivityAt = this.getLatestKnownActivityTimestamp();
+
+    if (disconnectedAt.getTime() < latestKnownActivityAt) {
+      throw new DomainRuleViolationError({
+        code: 'AGENT_DISCONNECTION_DATE_OUT_OF_ORDER',
+        message:
+          'Disconnection date cannot be earlier than the latest session activity',
+        details: {
+          sessionId: this.idValue,
+          latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
+          receivedDisconnectedAt: disconnectedAt.toISOString(),
+        },
+      });
+    }
+
+    this.disconnectedAtValue = new Date(disconnectedAt);
   }
 
   isActive(): boolean {
@@ -150,6 +215,10 @@ export class AgentSession {
     return new Date(this.lastStatusChangedAtValue);
   }
 
+  get lastHeartbeatAt(): Date {
+    return new Date(this.lastHeartbeatAtValue);
+  }
+
   toSnapshot(): AgentSessionSnapshot {
     return {
       id: this.idValue,
@@ -161,7 +230,31 @@ export class AgentSession {
         ? new Date(this.disconnectedAtValue)
         : null,
       lastStatusChangedAt: new Date(this.lastStatusChangedAtValue),
+      lastHeartbeatAt: new Date(this.lastHeartbeatAtValue),
     };
+  }
+
+  private assertActive(): void {
+    if (this.isActive()) {
+      return;
+    }
+
+    throw new DomainRuleViolationError({
+      code: 'AGENT_SESSION_ALREADY_DISCONNECTED',
+      message: 'The disconnected agent session cannot be modified',
+      details: {
+        sessionId: this.idValue,
+        disconnectedAt: this.disconnectedAtValue?.toISOString(),
+      },
+    });
+  }
+
+  private getLatestKnownActivityTimestamp(): number {
+    return Math.max(
+      this.connectedAtValue.getTime(),
+      this.lastStatusChangedAtValue.getTime(),
+      this.lastHeartbeatAtValue.getTime(),
+    );
   }
 
   private static requireText(
