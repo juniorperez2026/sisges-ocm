@@ -50,3 +50,6 @@ recordings/
 *.bak
 *.backup
 *.sql.gz
+
+# Inventarios locales de infraestructura
+local-artifacts/
