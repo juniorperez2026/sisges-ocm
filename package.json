@@ -20,7 +20,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "check": "npm run lint && npm run build && npm test -- --runInBand && npm run test:e2e -- --runInBand",
     "db:check": "node --env-file=.env scripts/check-sql-server-connection.cjs",
-    "db:inspect": "node --env-file=.env scripts/inspect-sql-server-metadata.cjs"
+    "db:inspect": "node --env-file=.env scripts/inspect-sql-server-metadata.cjs",
+    "db:migrate": "node --env-file=.env -r ts-node/register src/shared/infrastructure/database/typeorm/run-migrations.ts",
+    "db:preview-phones": "node --env-file=.env -r ts-node/register scripts/preview-legacy-phones.ts",
+    "db:check-targets": "node --env-file=.env scripts/check-sql-targets.cjs",
+    "db:cleanup-legacy-telephony": "node --env-file=.env scripts/cleanup-accidental-legacy-telephony.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -33,7 +37,8 @@
     "joi": "^18.2.3",
     "mssql": "^12.7.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "typeorm": "^1.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

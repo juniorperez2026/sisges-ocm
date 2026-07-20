@@ -1,9 +1,22 @@
 'use strict';
 
-function requireEnvironmentVariable(name) {
-  const value = process.env[name]?.trim();
+function environmentName(
+  prefix,
+  suffix,
+) {
+  return `${prefix}_${suffix}`;
+}
 
-  if (!value || value === 'change-this-value') {
+function requireEnvironmentVariable(
+  name,
+) {
+  const value =
+    process.env[name]?.trim();
+
+  if (
+    !value ||
+    value === 'change-this-value'
+  ) {
     throw new Error(
       `Environment variable ${name} is not configured`,
     );
@@ -12,17 +25,24 @@ function requireEnvironmentVariable(name) {
   return value;
 }
 
-function readInteger(name, defaultValue) {
-  const rawValue = process.env[name]?.trim();
+function readInteger(
+  name,
+  defaultValue,
+) {
+  const rawValue =
+    process.env[name]?.trim();
 
   if (!rawValue) {
     return defaultValue;
   }
 
-  const parsedValue = Number(rawValue);
+  const parsedValue =
+    Number(rawValue);
 
   if (
-    !Number.isInteger(parsedValue) ||
+    !Number.isInteger(
+      parsedValue,
+    ) ||
     parsedValue < 0
   ) {
     throw new Error(
@@ -33,9 +53,14 @@ function readInteger(name, defaultValue) {
   return parsedValue;
 }
 
-function readBoolean(name, defaultValue) {
+function readBoolean(
+  name,
+  defaultValue,
+) {
   const rawValue =
-    process.env[name]?.trim().toLowerCase();
+    process.env[name]
+      ?.trim()
+      .toLowerCase();
 
   if (!rawValue) {
     return defaultValue;
@@ -54,77 +79,128 @@ function readBoolean(name, defaultValue) {
   );
 }
 
-function createSqlServerConfig(appName) {
+function createSqlServerConfig(
+  appName,
+  prefix = 'SQL_SERVER',
+) {
   return {
-    server: requireEnvironmentVariable(
-      'SQL_SERVER_HOST',
-    ),
+    server:
+      requireEnvironmentVariable(
+        environmentName(
+          prefix,
+          'HOST',
+        ),
+      ),
 
     port: readInteger(
-      'SQL_SERVER_PORT',
+      environmentName(
+        prefix,
+        'PORT',
+      ),
       1433,
     ),
 
-    database: requireEnvironmentVariable(
-      'SQL_SERVER_DATABASE',
-    ),
+    database:
+      requireEnvironmentVariable(
+        environmentName(
+          prefix,
+          'DATABASE',
+        ),
+      ),
 
-    user: requireEnvironmentVariable(
-      'SQL_SERVER_USERNAME',
-    ),
+    user:
+      requireEnvironmentVariable(
+        environmentName(
+          prefix,
+          'USERNAME',
+        ),
+      ),
 
-    password: requireEnvironmentVariable(
-      'SQL_SERVER_PASSWORD',
-    ),
+    password:
+      requireEnvironmentVariable(
+        environmentName(
+          prefix,
+          'PASSWORD',
+        ),
+      ),
 
-    connectionTimeout: readInteger(
-      'SQL_SERVER_CONNECTION_TIMEOUT_MS',
-      10000,
-    ),
+    connectionTimeout:
+      readInteger(
+        environmentName(
+          prefix,
+          'CONNECTION_TIMEOUT_MS',
+        ),
+        10000,
+      ),
 
-    requestTimeout: readInteger(
-      'SQL_SERVER_REQUEST_TIMEOUT_MS',
-      15000,
-    ),
+    requestTimeout:
+      readInteger(
+        environmentName(
+          prefix,
+          'REQUEST_TIMEOUT_MS',
+        ),
+        15000,
+      ),
 
     pool: {
       max: readInteger(
-        'SQL_SERVER_POOL_MAX',
+        environmentName(
+          prefix,
+          'POOL_MAX',
+        ),
         5,
       ),
 
       min: readInteger(
-        'SQL_SERVER_POOL_MIN',
+        environmentName(
+          prefix,
+          'POOL_MIN',
+        ),
         0,
       ),
 
-      idleTimeoutMillis: readInteger(
-        'SQL_SERVER_POOL_IDLE_TIMEOUT_MS',
-        30000,
-      ),
+      idleTimeoutMillis:
+        readInteger(
+          environmentName(
+            prefix,
+            'POOL_IDLE_TIMEOUT_MS',
+          ),
+          30000,
+        ),
     },
 
     options: {
       encrypt: readBoolean(
-        'SQL_SERVER_ENCRYPT',
+        environmentName(
+          prefix,
+          'ENCRYPT',
+        ),
         false,
       ),
 
-      trustServerCertificate: readBoolean(
-        'SQL_SERVER_TRUST_CERTIFICATE',
-        true,
-      ),
+      trustServerCertificate:
+        readBoolean(
+          environmentName(
+            prefix,
+            'TRUST_CERTIFICATE',
+          ),
+          true,
+        ),
 
       appName,
       enableArithAbort: true,
+      useUTC: true,
     },
   };
 }
 
-function resolveErrorDetails(error) {
+function resolveErrorDetails(
+  error,
+) {
   if (!(error instanceof Error)) {
     return {
-      errorName: 'UnknownError',
+      errorName:
+        'UnknownError',
       message: String(error),
     };
   }
@@ -134,7 +210,8 @@ function resolveErrorDetails(error) {
     message: error.message,
 
     code:
-      typeof error.code === 'string'
+      typeof error.code ===
+      'string'
         ? error.code
         : undefined,
   };
