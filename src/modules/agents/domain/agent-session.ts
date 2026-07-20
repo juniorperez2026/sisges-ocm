@@ -18,6 +18,7 @@ export interface AgentSessionSnapshot {
   readonly disconnectedAt: Date | null;
   readonly lastStatusChangedAt: Date;
   readonly lastHeartbeatAt: Date;
+  readonly version: number;
 }
 
 export class AgentSession {
@@ -30,6 +31,7 @@ export class AgentSession {
     private disconnectedAtValue: Date | null,
     private lastStatusChangedAtValue: Date,
     private lastHeartbeatAtValue: Date,
+    private versionValue: number,
   ) {}
 
   static start(input: StartAgentSessionInput): AgentSession {
@@ -68,10 +70,22 @@ export class AgentSession {
       null,
       connectedAt,
       connectedAt,
+      0,
     );
   }
 
   static rehydrate(snapshot: AgentSessionSnapshot): AgentSession {
+    if (!Number.isInteger(snapshot.version) || snapshot.version < 0) {
+      throw new DomainRuleViolationError({
+        code: 'INVALID_AGENT_SESSION_VERSION',
+        message: 'Agent session version is invalid',
+        details: {
+          sessionId: snapshot.id,
+          version: snapshot.version,
+        },
+      });
+    }
+
     return new AgentSession(
       snapshot.id,
       snapshot.agentId,
@@ -81,6 +95,7 @@ export class AgentSession {
       snapshot.disconnectedAt ? new Date(snapshot.disconnectedAt) : null,
       new Date(snapshot.lastStatusChangedAt),
       new Date(snapshot.lastHeartbeatAt),
+      snapshot.version,
     );
   }
 
@@ -106,7 +121,9 @@ export class AgentSession {
           'Agent status change date cannot be earlier than the latest session activity',
         details: {
           sessionId: this.idValue,
+
           latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
+
           receivedChangedAt: changedAt.toISOString(),
         },
       });
@@ -115,6 +132,7 @@ export class AgentSession {
     transitionPolicy.assertTransition(this.statusValue, nextStatus);
 
     this.statusValue = nextStatus;
+
     this.lastStatusChangedAtValue = new Date(changedAt);
   }
 
@@ -136,7 +154,9 @@ export class AgentSession {
           'Heartbeat date cannot be earlier than the latest session activity',
         details: {
           sessionId: this.idValue,
+
           latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
+
           receivedHeartbeatAt: receivedAt.toISOString(),
         },
       });
@@ -174,13 +194,32 @@ export class AgentSession {
           'Disconnection date cannot be earlier than the latest session activity',
         details: {
           sessionId: this.idValue,
+
           latestActivityAt: new Date(latestKnownActivityAt).toISOString(),
+
           receivedDisconnectedAt: disconnectedAt.toISOString(),
         },
       });
     }
 
     this.disconnectedAtValue = new Date(disconnectedAt);
+  }
+
+  markPersisted(nextVersion: number): void {
+    if (!Number.isInteger(nextVersion) || nextVersion <= this.versionValue) {
+      throw new DomainRuleViolationError({
+        code: 'INVALID_AGENT_SESSION_PERSISTED_VERSION',
+        message:
+          'Persisted agent session version must be greater than the current version',
+        details: {
+          sessionId: this.idValue,
+          currentVersion: this.versionValue,
+          nextVersion,
+        },
+      });
+    }
+
+    this.versionValue = nextVersion;
   }
 
   isActive(): boolean {
@@ -219,18 +258,28 @@ export class AgentSession {
     return new Date(this.lastHeartbeatAtValue);
   }
 
+  get version(): number {
+    return this.versionValue;
+  }
+
   toSnapshot(): AgentSessionSnapshot {
     return {
       id: this.idValue,
       agentId: this.agentIdValue,
       extensionId: this.extensionIdValue,
       status: this.statusValue,
+
       connectedAt: new Date(this.connectedAtValue),
+
       disconnectedAt: this.disconnectedAtValue
         ? new Date(this.disconnectedAtValue)
         : null,
+
       lastStatusChangedAt: new Date(this.lastStatusChangedAtValue),
+
       lastHeartbeatAt: new Date(this.lastHeartbeatAtValue),
+
+      version: this.versionValue,
     };
   }
 
@@ -244,6 +293,7 @@ export class AgentSession {
       message: 'The disconnected agent session cannot be modified',
       details: {
         sessionId: this.idValue,
+
         disconnectedAt: this.disconnectedAtValue?.toISOString(),
       },
     });

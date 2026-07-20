@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { AgentSessionRepository } from '../../application/ports/agent-session.repository';
 import {
   AgentSession,
   type AgentSessionSnapshot,
 } from '../../domain/agent-session';
+import type { AgentSessionRepository } from '../../application/ports/agent-session.repository';
 
 @Injectable()
 export class InMemoryAgentSessionRepository implements AgentSessionRepository {
@@ -26,12 +26,10 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository {
   }
 
   save(session: AgentSession): Promise<void> {
+    session.markPersisted(session.version + 1);
+
     this.sessions.set(session.id, session.toSnapshot());
 
     return Promise.resolve();
-  }
-
-  clear(): void {
-    this.sessions.clear();
   }
 }

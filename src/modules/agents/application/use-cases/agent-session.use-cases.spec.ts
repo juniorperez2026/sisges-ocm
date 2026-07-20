@@ -78,13 +78,13 @@ describe('Agent session use cases', () => {
   it('starts an agent session as OFFLINE', async () => {
     const result = await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     expect(result).toEqual({
       id: sessionId,
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
       status: AGENT_STATUS.OFFLINE,
       connectedAt: connectedAt.toISOString(),
       disconnectedAt: null,
@@ -96,7 +96,7 @@ describe('Agent session use cases', () => {
   it('retrieves a previously created session', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     const result = await getUseCase.execute(sessionId);
@@ -108,13 +108,13 @@ describe('Agent session use cases', () => {
   it('rejects a second active session for an agent', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     await expect(
       startUseCase.execute({
         agentId: 'agent-001',
-        extensionId: 'extension-1002',
+        extensionId: '1002',
       }),
     ).rejects.toBeInstanceOf(ActiveAgentSessionExistsError);
   });
@@ -122,7 +122,7 @@ describe('Agent session use cases', () => {
   it('changes status using the domain policy', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     const result = await changeStatusUseCase.execute({
@@ -136,7 +136,7 @@ describe('Agent session use cases', () => {
   it('rejects an invalid status transition', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     await expect(
@@ -150,7 +150,7 @@ describe('Agent session use cases', () => {
   it('updates the heartbeat of an active session', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     const heartbeatAt = new Date('2026-07-16T17:01:00.000Z');
@@ -165,7 +165,7 @@ describe('Agent session use cases', () => {
   it('disconnects an OFFLINE session', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     const disconnectedAt = new Date('2026-07-16T17:02:00.000Z');
@@ -180,7 +180,7 @@ describe('Agent session use cases', () => {
   it('rejects disconnection while agent is AVAILABLE', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     clock.set(new Date('2026-07-16T17:01:00.000Z'));
@@ -200,7 +200,7 @@ describe('Agent session use cases', () => {
   it('rejects heartbeat after disconnection', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     clock.set(new Date('2026-07-16T17:01:00.000Z'));
@@ -217,7 +217,7 @@ describe('Agent session use cases', () => {
   it('allows a new session after the previous one disconnects', async () => {
     await startUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1001',
+      extensionId: '1001',
     });
 
     clock.set(new Date('2026-07-16T17:01:00.000Z'));
@@ -232,7 +232,7 @@ describe('Agent session use cases', () => {
 
     const secondSession = await secondStartUseCase.execute({
       agentId: 'agent-001',
-      extensionId: 'extension-1002',
+      extensionId: '1002',
     });
 
     expect(secondSession.id).not.toBe(sessionId);

@@ -24,7 +24,8 @@
     "db:migrate": "node --env-file=.env -r ts-node/register src/shared/infrastructure/database/typeorm/run-migrations.ts",
     "db:preview-phones": "node --env-file=.env -r ts-node/register scripts/preview-legacy-phones.ts",
     "db:check-targets": "node --env-file=.env scripts/check-sql-targets.cjs",
-    "db:cleanup-legacy-telephony": "node --env-file=.env scripts/cleanup-accidental-legacy-telephony.cjs"
+    "db:cleanup-legacy-telephony": "node --env-file=.env scripts/cleanup-accidental-legacy-telephony.cjs",
+    "db:register-extension": "node --env-file=.env -r ts-node/register scripts/register-telephony-extension.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

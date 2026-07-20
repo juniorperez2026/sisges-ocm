@@ -62,7 +62,7 @@ describe('Application (e2e)', () => {
 
   async function createAgentSession(
     agentId = `agent-${randomUUID()}`,
-    extensionId = 'extension-1001',
+    extensionId = '1001',
   ): Promise<AgentSessionResponse> {
     const response = await request(httpServer)
       .post('/api/agent-sessions')
@@ -138,7 +138,7 @@ describe('Application (e2e)', () => {
 
       expect(session.id).toEqual(expect.any(String));
       expect(session.agentId).toEqual(expect.any(String));
-      expect(session.extensionId).toBe('extension-1001');
+      expect(session.extensionId).toBe('1001');
       expect(session.status).toBe('OFFLINE');
       expect(session.connectedAt).toEqual(expect.any(String));
       expect(session.lastStatusChangedAt).toEqual(expect.any(String));
@@ -200,13 +200,13 @@ describe('Application (e2e)', () => {
     it('rejects a second active session for the same agent', async () => {
       const agentId = `agent-${randomUUID()}`;
 
-      await createAgentSession(agentId, 'extension-1001');
+      await createAgentSession(agentId, '1001');
 
       const response = await request(httpServer)
         .post('/api/agent-sessions')
         .send({
           agentId,
-          extensionId: 'extension-1002',
+          extensionId: '1002',
         })
         .expect(409);
 
@@ -267,11 +267,11 @@ describe('Application (e2e)', () => {
       expect(result.status).toBe('OFFLINE');
       expect(result.disconnectedAt).toEqual(expect.any(String));
 
-      const secondSession = await createAgentSession(agentId, 'extension-1002');
+      const secondSession = await createAgentSession(agentId, '1002');
 
       expect(secondSession.id).not.toBe(created.id);
       expect(secondSession.agentId).toBe(agentId);
-      expect(secondSession.extensionId).toBe('extension-1002');
+      expect(secondSession.extensionId).toBe('1002');
       expect(secondSession.status).toBe('OFFLINE');
     });
 
