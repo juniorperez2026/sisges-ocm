@@ -135,5 +135,7 @@ const applicationProviders: Provider[] = [
   controllers: [AgentSessionsController],
 
   providers: [...infrastructureProviders, ...applicationProviders],
+
+  exports: [GetAgentSessionUseCase],
 })
 export class AgentsModule {}

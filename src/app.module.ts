@@ -10,6 +10,8 @@ import { HealthModule } from './modules/health/health.module';
 import { environmentValidationSchema } from './shared/config/environment.schema';
 import { CorrelationIdMiddleware } from './shared/http/correlation-id.middleware';
 import { PhonesModule } from './modules/phones/phones.module';
+import { CallsModule } from './modules/calls/calls.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,6 +27,7 @@ import { PhonesModule } from './modules/phones/phones.module';
     HealthModule,
     AgentsModule,
     PhonesModule,
+    CallsModule,
   ],
 })
 export class AppModule implements NestModule {
